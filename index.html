@@ -333,6 +333,7 @@
                 mesh.userData = {
                     origPos: mesh.position.clone(),
                     targetPos: mesh.position.clone(),
+                    targetScale: new THREE.Vector3(1, 1, 1),
                     colorKey: bData.color,
                     text: bData.text,
                     isPulled: false
@@ -375,20 +376,16 @@
                 
                 // If a block is already pulled, reset it
                 if (activeBlock && activeBlock !== clickedBlock) {
-                    activeBlock.userData.targetPos.copy(activeBlock.userData.origPos);
+                    activeBlock.userData.targetScale.set(1, 1, 1);
                     activeBlock.userData.isPulled = false;
                     // Reset highlight
                     activeBlock.material.emissive.setHex(0x000000);
                 }
 
                 if(!clickedBlock.userData.isPulled) {
-                    // Pull out block (Slide forward on Z axis by 1.5 units)
+                    // Remove block (shrink to disappear instead of sliding)
                     activeBlock = clickedBlock;
-                    activeBlock.userData.targetPos.set(
-                        activeBlock.userData.origPos.x,
-                        activeBlock.userData.origPos.y,
-                        activeBlock.userData.origPos.z + 1.5
-                    );
+                    activeBlock.userData.targetScale.set(0.001, 0.001, 0.001);
                     activeBlock.userData.isPulled = true;
                     
                     // Add subtle glow
@@ -406,7 +403,7 @@
                     infoCard.classList.add('active');
                 } else {
                     // Push it back in if clicked again
-                    clickedBlock.userData.targetPos.copy(clickedBlock.userData.origPos);
+                    clickedBlock.userData.targetScale.set(1, 1, 1);
                     clickedBlock.userData.isPulled = false;
                     clickedBlock.material.emissive.setHex(0x000000);
                     activeBlock = null;
@@ -415,7 +412,7 @@
             } else {
                 // Clicked outside - reset active block
                 if (activeBlock) {
-                    activeBlock.userData.targetPos.copy(activeBlock.userData.origPos);
+                    activeBlock.userData.targetScale.set(1, 1, 1);
                     activeBlock.userData.isPulled = false;
                     activeBlock.material.emissive.setHex(0x000000);
                     activeBlock = null;
@@ -428,6 +425,7 @@
         resetBtn.addEventListener('click', () => {
             blocks.forEach(block => {
                 block.userData.targetPos.copy(block.userData.origPos);
+                block.userData.targetScale.set(1, 1, 1);
                 block.userData.isPulled = false;
                 block.material.emissive.setHex(0x000000);
             });
@@ -443,9 +441,12 @@
         function animate() {
             requestAnimationFrame(animate);
 
-            // Lerp blocks towards their target positions for smooth sliding
+            // Lerp blocks towards their target positions for smooth sliding/scaling
             blocks.forEach(block => {
                 block.position.lerp(block.userData.targetPos, 0.1);
+                if (block.userData.targetScale) {
+                    block.scale.lerp(block.userData.targetScale, 0.15);
+                }
             });
 
             controls.update();
