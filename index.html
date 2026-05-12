@@ -303,20 +303,19 @@
         scene.add(floor);
 
         // Neon Wireframe Box surrounding the tower
-        // Bounds calc: X (-1.05 to 1.05) -> width ~3.1, Z (0) -> depth ~0.6, Y (0 to 3.6)
         const frameGeo = new THREE.BoxGeometry(3.4, 4.0, 1.2);
         const edges = new THREE.EdgesGeometry(frameGeo);
         const frameMat = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.3 });
         const frame = new THREE.LineSegments(edges, frameMat);
-        frame.position.set(0, 1.8, 0); // Center of the 3.6h tower
+        frame.position.set(0, 1.8, 0); 
         scene.add(frame);
 
         // --- 5. BUILD THE TOWER ---
         const blocks = [];
         const blockGeo = new THREE.BoxGeometry(W, H, D);
         
-        // Cache materials to improve performance
-        const materials = {
+        // Cache base materials
+        const baseMaterials = {
             'pink': new THREE.MeshStandardMaterial({ color: BLOCK_CONFIG['pink'].hex, roughness: 0.2, metalness: 0.1 }),
             'green': new THREE.MeshStandardMaterial({ color: BLOCK_CONFIG['green'].hex, roughness: 0.2, metalness: 0.1 }),
             'blue': new THREE.MeshStandardMaterial({ color: BLOCK_CONFIG['blue'].hex, roughness: 0.2, metalness: 0.1 })
@@ -324,7 +323,8 @@
 
         towerData.forEach(layer => {
             layer.blocks.forEach(bData => {
-                const mesh = new THREE.Mesh(blockGeo, materials[bData.color]);
+                // CLONE material so emissive highlights don't affect all blocks of the same color
+                const mesh = new THREE.Mesh(blockGeo, baseMaterials[bData.color].clone());
                 mesh.position.set(bData.x, layer.y, bData.z);
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;
@@ -348,6 +348,7 @@
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         let activeBlock = null;
+        let pointerDownPos = new THREE.Vector2();
 
         // UI Elements
         const infoCard = document.getElementById('info-card');
@@ -356,13 +357,18 @@
         const emojiBadgeEl = document.getElementById('emoji-badge');
         const resetBtn = document.getElementById('reset-btn');
 
-        // Handle clicks
+        // Track pointer down to differentiate between clicking and dragging the camera
         window.addEventListener('pointerdown', (event) => {
-            // Only left clicks or touch
-            if(event.button !== 0 && event.button !== undefined) return;
-            
+            pointerDownPos.set(event.clientX, event.clientY);
+        });
+
+        window.addEventListener('pointerup', (event) => {
             // Ignore if clicking on UI
             if(event.target.closest('#info-card') || event.target.closest('#reset-btn')) return;
+
+            // If pointer moved more than a few pixels, it was a camera drag, not a block click
+            const dist = Math.hypot(event.clientX - pointerDownPos.x, event.clientY - pointerDownPos.y);
+            if (dist > 5) return;
 
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -371,24 +377,21 @@
             const intersects = raycaster.intersectObjects(blocks);
 
             if (intersects.length > 0) {
-                // FIXED: intersects is an array, we need the first object's object property
-                const clickedBlock = intersects.object;
+                const clickedBlock = intersects[0].object;
                 
                 // If a block is already pulled, reset it
                 if (activeBlock && activeBlock !== clickedBlock) {
                     activeBlock.userData.targetScale.set(1, 1, 1);
                     activeBlock.userData.isPulled = false;
-                    // Reset highlight
                     activeBlock.material.emissive.setHex(0x000000);
                 }
 
                 if(!clickedBlock.userData.isPulled) {
-                    // Remove block (shrink to disappear instead of sliding)
+                    // Remove block entirely (shrink to 0)
                     activeBlock = clickedBlock;
                     activeBlock.userData.targetScale.set(0.001, 0.001, 0.001);
                     activeBlock.userData.isPulled = true;
                     
-                    // Add subtle glow
                     activeBlock.material.emissive.setHex(0x222222);
 
                     // Update UI Card
@@ -402,7 +405,7 @@
 
                     infoCard.classList.add('active');
                 } else {
-                    // Push it back in if clicked again
+                    // Bring it back
                     clickedBlock.userData.targetScale.set(1, 1, 1);
                     clickedBlock.userData.isPulled = false;
                     clickedBlock.material.emissive.setHex(0x000000);
